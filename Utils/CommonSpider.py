@@ -37,12 +37,11 @@ class CommonSpider:
 
     encoding = "utf-8"
 
-    def getItem(self, box, url, session=None, encoding="utf-8"):
+    def getItem(self, box, url, cookie=None, session=None, encoding="utf-8"):
         print("访问页：" + url)
         if session is None:
             session = requests.session()
-        response = session.get(url)
-        time.sleep(26)
+        response = session.get(url, cookies=cookie)
         self.encoding = encoding
 
         # 解析网页，获取数据
@@ -144,7 +143,7 @@ def test():
     session = requests.session()
     next_url = "http://www.bitcoin86.com/news/"
     while next_url is not None:
-        next_url, result = spider.getItem(box, next_url, session)
+        next_url, result = spider.getItem(box, next_url, session, encoding="gbk")
         print(result)
 
 # test()
