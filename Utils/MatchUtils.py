@@ -88,6 +88,15 @@ class MatchUtils:
         file.write(content)
         file.close()
 
+    @staticmethod
+    def web_get(url):
+        response = requests.get(url)
+        if response.status_code != 200:
+            logging.error("status_code = [{0}] , url = [{1}]".format(response.status_code, url))
+            return
+        return response.content.decode(response.apparent_encoding)
+
+
 # 测试
 # from src.io.MatchUtils import MatchUtils
 

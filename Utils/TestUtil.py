@@ -61,14 +61,16 @@ def test_ImgSpider():
 
 # 测试MatchUtils
 def test_MatchUtils():
-    MatchUtils.save_img("D:/dd/3/", None, "http://pic.yupoo.com/match7/8152c537/86db77ef.jpg")
-    MatchUtils.save_text("D:/dd/4/6/hhs.txt", "传说,女娲娘娘炼就七根火柴,来帮助人类度过第一个冬季,从此,七根火柴散落人间,不见踪迹...")
-    MatchUtils.save_byte("D:/dd/4/5/hhs2.txt", b'1wdd')
+    # MatchUtils.save_img("D:/dd/3/", None, "http://pic.yupoo.com/match7/8152c537/86db77ef.jpg")
+    # MatchUtils.save_text("D:/dd/4/6/hhs.txt", "传说,女娲娘娘炼就七根火柴,来帮助人类度过第一个冬季,从此,七根火柴散落人间,不见踪迹...")
+    # MatchUtils.save_byte("D:/dd/4/5/hhs2.txt", b'1wdd')
+    content = MatchUtils.web_get("http://www.douban.com")
+    print(content)
 
 
 # test_BaseDao()
 # test_CommonSpider()
-test_ImgSpider()
-# test_MatchUtils()
+# test_ImgSpider()
+test_MatchUtils()
 
 
