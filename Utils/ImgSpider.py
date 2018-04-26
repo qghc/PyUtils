@@ -7,7 +7,7 @@ import urllib.parse as urlparse
 from bs4 import BeautifulSoup
 
 
-class findImgPages:
+class FindImgPages:
     # 图片所在的标签标识
     itemBox = ""
     # 标识类型，id，class
@@ -103,7 +103,7 @@ class findImgPages:
         return response, lastNext
 
 
-# fip = findImgPages()
+# fip = FindImgPages()
 # fip.init("photo-wp", "class", "next_photo", "id", 2)
 # result = fip.spider("https://movie.douban.com/photos/photo/762146744/")
 # print(result)

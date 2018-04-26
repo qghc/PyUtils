@@ -1,7 +1,7 @@
 from Utils.BaseDao import BaseDao, Page
 
 from Utils.CommonSpider import CommonSpider, Element, Box
-from Utils.ImgSpider import findImgPages
+from Utils.ImgSpider import FindImgPages
 from Utils.MatchUtils import MatchUtils
 
 
@@ -30,7 +30,6 @@ def test_BaseDao():
 
 
 def test_CommonSpider():
-    global result
     # 测试CommonSpider
     title = Element()
     title.tag = "span"
@@ -53,7 +52,7 @@ def test_CommonSpider():
 
 # 测试ImgSpider
 def test_ImgSpider():
-    fip = findImgPages()
+    fip = FindImgPages()
 
     fip.init("photo-wp", "class", "next_photo", "id", 16)
     result = fip.spider("https://movie.douban.com/photos/photo/762146744/")
