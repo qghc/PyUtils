@@ -54,7 +54,7 @@ def test_CommonSpider():
 def test_ImgSpider():
     fip = FindImgPages()
 
-    fip.init("photo-wp", "class", "next_photo", "id", 16)
+    fip.init("photo-wp", "class", "next_photo", "id", 2)
     result = fip.spider("https://movie.douban.com/photos/photo/762146744/")
     print(result)
 
@@ -66,9 +66,9 @@ def test_MatchUtils():
     MatchUtils.save_byte("D:/dd/4/5/hhs2.txt", b'1wdd')
 
 
-test_BaseDao()
+# test_BaseDao()
 # test_CommonSpider()
-# test_ImgSpider()
+test_ImgSpider()
 # test_MatchUtils()
 
 

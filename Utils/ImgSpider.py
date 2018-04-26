@@ -25,7 +25,7 @@ class FindImgPages:
     nextBtnHead = None
 
     # 初始化参数
-    def init(self,itemBox, itemBoxType, nextBtn, nextBtnType, maxCount):
+    def init(self,itemBox, itemBoxType, nextBtn=None, nextBtnType=None, maxCount=1):
         self.itemBox = itemBox
         self.itemBoxType = itemBoxType
         self.nextBtn = nextBtn
@@ -54,7 +54,8 @@ class FindImgPages:
         while response is not None and count < self.maxCount:
             soup = BeautifulSoup(response.content.decode(self.encoding), "lxml")
             result.extend(self.parseImg(soup, imgTag, imgId, imgIdType, attr))
-            response,lastNext = self.loadNextPage(lastNext, self.session, soup)
+            if self.nextBtn:
+                response, lastNext = self.loadNextPage(lastNext, self.session, soup)
             count = count+1
             time.sleep(random.randint(1, 1))
         return result
