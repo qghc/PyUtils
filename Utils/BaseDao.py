@@ -273,7 +273,7 @@ class BaseDao(object):
         result = self.execute_query(sql, True)
         return self._parse_result(result, clazz)
 
-    def select_pk(self, table_name=None, primary_key=None):
+    def select_pk(self, table_name=None, primary_key=None, clazz=None):
         '''按主键查询
         - @table_name 表名
         - @primary_key 主键值
@@ -284,7 +284,7 @@ class BaseDao(object):
         sql = "SELECT %s FROM %s" % (stitch_str, self._table)
         sql = QueryUtil.query_sql(sql, {self._get_primary_key(self._table): primary_key})
         result = self.execute_query(sql, True)
-        return self._parse_result(result)
+        return self._parse_result(result, clazz)
 
     def select_all(self, table_name=None, filters=None, clazz=None):
         '''查询所有
