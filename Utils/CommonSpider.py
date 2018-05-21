@@ -1,4 +1,5 @@
 # -*-coding:utf-8-*-
+import sys
 
 __author__ = '亓根火柴'
 import requests
@@ -37,7 +38,7 @@ class CommonSpider:
 
     encoding = "utf-8"
 
-    def getItem(self, box, url, cookie=None, session=None, encoding="utf-8"):
+    def getItem(self, box, url, cookie=None, session=None, encoding="utf-8", sensitive=None):
         print("访问页：" + url)
         if session is None:
             session = requests.session()
@@ -45,7 +46,7 @@ class CommonSpider:
         self.encoding = encoding
 
         # 解析网页，获取数据
-        result = self.__getDetail(response.content, box)
+        result = self.__getDetail(response.content, box, sensitive)
         # 获取下一页
         next_url = None
         if box.next is not None:
@@ -57,8 +58,14 @@ class CommonSpider:
                 time.sleep(1)
         return next_url, result
 
-    def __getDetail(self, content, box):
+    def __getDetail(self, content, box, sensitive):
         soup = BeautifulSoup(content, "lxml", from_encoding=self.encoding)
+        if sensitive:
+            for kw in sensitive:
+                if kw in soup.text:
+                    logging.error("遇到敏感词，程序已结束！")
+                    sys.exit(1)
+
         # 找到所有的box
         if box.id is not None and box.clazz is not None:
             allBoxes = soup.find_all(box.tag, id=box.id, class_=box.clazz)
