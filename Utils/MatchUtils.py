@@ -1,8 +1,7 @@
 # -*-coding:utf-8-*-
-import logging
-
 __author__ = "亓根火柴"
-
+import logging
+from urllib.parse import urlparse
 import requests
 import os
 
@@ -25,8 +24,13 @@ class MatchUtils:
             name = url[url.rindex("/")+1:]
         if not os.path.exists(path):
             os.makedirs(path)
+        # 解析主机
+        uri = urlparse(url)
+        headers = {
+            "Referer": uri.scheme + "://" + uri.netloc
+        }
         # 访问网络
-        response = requests.get(url)
+        response = requests.get(url, headers=headers)
         if response.status_code != 200:
             logging.error("status_code = [{0}] , url = [{1}]".format(response.status_code, url))
             return
@@ -48,6 +52,15 @@ class MatchUtils:
         lines = file.readlines()
         file.close()
         return lines
+
+    @staticmethod
+    def read_bin(path):
+        if not os.path.exists(path):
+            return None
+        file = open(path, "rb")
+        content = file.read()
+        file.close()
+        return content
 
     @staticmethod
     def save_text(path, content=str):
