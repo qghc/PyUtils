@@ -339,7 +339,7 @@ class BaseDao(object):
         elif not isinstance(obj, dict):
             obj = obj.__dict__
         primary_key = self._get_primary_key(self._table)
-        if primary_key not in obj.keys():
+        if primary_key is not None and primary_key not in obj.keys():
             obj[primary_key] = None
         stitch_str = stitch_sequence(obj.keys())
         value_list = []
