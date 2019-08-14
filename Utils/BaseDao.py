@@ -221,12 +221,38 @@ class BaseDao(object):
         if table_name is None:
             if self._table is None:
                 raise Exception("Parameter [table_name] is None.")
-            else:
-                table_name = self._table
         else:
             if self._table != table_name:
                 self._table = table_name
                 self._column_list = self._table_column_dict_list[self._table]
+
+    def generate_model(self, table_name=None, model_name=None, model_path="./model"):
+        """根据表字段生成实体model"""
+        if table_name is None:
+            if self._table is None:
+                raise Exception("Parameter [table_name] can not be None.")
+            else:
+                table_name = self._table
+        if model_name is None:
+            model_name = table_name
+
+        # 若该表没初始化，则初始化之
+        if table_name not in self._table_dict:
+            self._init_table_dict(table_name)
+        if len(self._table_dict[table_name]) <= 0:
+            raise Exception("Table [%s] does not exist." % table_name)
+        # 刷新表-字段数据
+        self._init_table_column_dict_list()
+
+        # 写入文件
+        model_path = model_path + "/" + model_name + ".py"
+        file = open(model_path, mode="w")
+        file.write("\n")
+        file.write("class %s(object):\n" % model_name)
+        for column in self._table_column_dict_list[table_name]:
+            file.write("    %s = None\n" % column)
+        file.close()
+        logging.info("[%s] %s 已生成。" % (self._database, model_path))
 
     def execute_query(self, sql=None, single=False):
         '''执行查询 SQL 语句

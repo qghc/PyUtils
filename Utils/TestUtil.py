@@ -16,6 +16,9 @@ class Comment:
 # 测试BaseDao
 def test_BaseDao():
     dao = BaseDao("comment")
+    # 测试生成model
+    dao.generate_model(model_name="Comment")
+    # 测试查询
     result = dao.select_one(clazz=Comment)
     print(result.user_id)
     print(result.__dict__)
