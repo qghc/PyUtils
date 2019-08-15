@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding=utf-8 -*-
 
-'''
+"""
 基于 DBUtils 和 pymysql 结合的简便操作数据库的类.
 已在原代码上进行了修改：
 1.增加读取配置文件功能
 2.适配传入的obj参数，同时支持普通对象和dict类型
 3.适配返回结果，如果传入参数中有clazz则返回该类的一个对象，否则返回字典
 4.简化分页查询操作逻辑
-'''
+5.增加生成表实体model的功能
+6.增加初始化多个表的功能
+7.修复若干bug
+"""
+import types
 
 __author__ = "阮程、亓根火柴（修改优化）"
 
@@ -26,22 +30,22 @@ logging.basicConfig(
 
 
 def get_time(fmt=None):
-    '''
+    """
     获取当前时间
     - @param: fmt 时间格式化字符串
-    '''
+    """
     fmt = fmt or "%Y-%m-%d %H:%M:%S"
     return time.strftime(fmt, time.localtime())
 
 
 def stitch_sequence(seq=None, is_field=True, suf=None):
-    '''
+    """
     序列拼接方法, 用于将序列拼接成字符串
     - :seq: 拼接序列
     - :suf: 拼接后缀(默认使用 ",")
     - :is_field: 是否为数据库字段序列
-    '''
-    if seq is None:
+    """
+    if seq is None or len(seq) == 0:
         raise Exception("Parameter seq is None")
     suf = suf or ","
     res = str()
@@ -74,7 +78,9 @@ class BaseDao(object):
     简便的数据库操作基类，该类所操作的表必须有主键
     初始化参数如下：
     - :table: 初始化 BaseDao 对象的数据库表名(默认: None), 如果为空，
-    则会初始化该数据库下所有表的信息, 如果不为空，则只初始化传入的 table 的表
+    则会初始化该数据库下所有表的信息, 如果不为空，则只初始化传入的 table 的表,
+    如果传入list会初始化list中的表, 并将第一个表作为默认表，
+    可以通过change_table()方法切换表名（或者在执行时指定表名）
     - :creator: 创建连接对象（默认: pymysql）
     - :host: 连接数据库主机地址(默认: localhost)
     - :port: 连接数据库端口(默认: 3306)
@@ -88,6 +94,36 @@ class BaseDao(object):
 
     def __init__(self, table=None, creator=pymysql, host="localhost", port=3306, user=None, password=None,
                  database=None, charset="utf8", use_conf=True):
+        """
+        1三种读取配置的方式
+            1.1默认读取运行文件所在目录下的BaseDao.conf
+
+            1.2通过构造器读取
+            dao = BaseDao(user="", password="", database="")
+
+            1.3通过字典读取
+            CONFIG = {
+                "user": "root",
+                "password": "root",
+                "database": "test",
+                "table": "province"
+            }
+            dao = BaseDao(**CONFIG, use_conf=False)
+
+        2三种初始化表数据的方式
+            2.1初始化所有表
+            dao = BaseDao()
+
+            2.2初始化comment表
+            dao = BaseDao("comment")
+
+            2.3初始化多个表，并将第一个表作为默认表
+            table_list = ["aaa_test", "comment"]
+            dao = BaseDao(table_list)
+            dao.change_table(table_list[1])             # 通过此方法变更默认表名
+            dao.select_all(table_name=table_list[1])    # 或者在执行时指定表名
+
+        """
         if use_conf:
             host, port, user, password, database, charset = readConfig()
         if host is None:
@@ -117,7 +153,7 @@ class BaseDao(object):
         logging.info("[{0}] 数据库初始化成功。耗时：{1} ms。".format(database, (end - start)))
 
     def __del__(self):
-        '重写类被清除时调用的方法'
+        """重写类被清除时调用的方法"""
         if self.__cursor:
             self.__cursor.close()
         if self.__conn:
@@ -125,15 +161,17 @@ class BaseDao(object):
         logging.debug("[{0}] 连接关闭。".format(self._database))
 
     def _init_connect(self):
-        '初始化连接'
+        """初始化连接"""
         try:
             self.__conn = PooledDB.connect(**self._config)
             self.__cursor = self.__conn.cursor()
         except Exception as e:
             logging.error(e)
+            if self.__conn is None:
+                raise ValueError("Failed to initialize connection.")
 
     def _init_params(self):
-        '初始化参数'
+        """初始化参数"""
         self._table_dict = {}
         self._information_schema_columns = []
         self._table_column_dict_list = {}
@@ -141,12 +179,18 @@ class BaseDao(object):
             self._init_table_dict_list()
             self._init_table_column_dict_list()
         else:
-            self._init_table_dict(self._table)
+            # 支持初始化多个表
+            if isinstance(self._table, list) and len(self._table) > 0:
+                for table in self._table:
+                    self._init_table_dict(table)
+                self._table = self._table[0]
+            else:
+                self._init_table_dict(self._table)
             self._init_table_column_dict_list()
             self._column_list = self._table_column_dict_list[self._table]
 
     def _init_information_schema_columns(self):
-        "查询 information_schema.`COLUMNS` 中的列"
+        """查询 information_schema.`COLUMNS` 中的列"""
         sql = """SELECT COLUMN_NAME FROM information_schema.`COLUMNS` WHERE TABLE_SCHEMA='information_schema' AND TABLE_NAME='COLUMNS' """
         result_tuple = self.execute_query(sql)
         if result_tuple is None:
@@ -155,7 +199,7 @@ class BaseDao(object):
         self._information_schema_columns = column_list
 
     def _init_table_dict(self, table_name):
-        '初始化表'
+        """初始化表"""
         if not self._information_schema_columns:
             self._init_information_schema_columns()
         stitch_str = stitch_sequence(self._information_schema_columns)
@@ -169,7 +213,7 @@ class BaseDao(object):
         self._table_dict[table_name] = column_dict
 
     def _init_table_dict_list(self):
-        "初始化表字典对象"
+        """初始化表字典对象"""
         if not self._information_schema_columns:
             self._init_information_schema_columns()
         sql = "SELECT TABLE_NAME FROM information_schema.`TABLES` WHERE TABLE_SCHEMA='%s'" % (
@@ -180,13 +224,13 @@ class BaseDao(object):
             self._init_table_dict(table[0])
 
     def _init_table_column_dict_list(self):
-        '''初始化表字段字典列表'''
+        """初始化表字段字典列表"""
         for table, column_dict in self._table_dict.items():
             column_list = [column for column in column_dict.keys()]
             self._table_column_dict_list[table] = column_list
 
     def _parse_result(self, result, clazz):
-        '用于解析单个查询结果，返回字典对象，或者普通对象'
+        """用于解析单个查询结果，返回字典对象，或者普通对象"""
         if result is None:
             return None
         if clazz is None:
@@ -198,14 +242,14 @@ class BaseDao(object):
         return obj
 
     def _parse_results(self, results, clazz):
-        '用于解析多个查询结果，返回字典列表对象'
+        """用于解析多个查询结果，返回字典列表对象"""
         if results is None:
             return None
         objs = [self._parse_result(result, clazz) for result in results]
         return objs
 
     def _get_primary_key(self, table_name):
-        '获取表对应的主键字段'
+        """获取表对应的主键字段"""
         if self._table_dict.get(table_name) is None:
             raise Exception(table_name, "is not exist.")
         for column, column_dict in self._table_dict[table_name].items():
@@ -213,11 +257,11 @@ class BaseDao(object):
                 return column
 
     def _get_table_column_list(self, table_name=None):
-        '查询表的字段列表, 将查询出来的字段列表存入 __fields 中'
+        """查询表的字段列表, 将查询出来的字段列表存入 __fields 中"""
         return self._table_column_dict_list[table_name]
 
     def _check_table_name(self, table_name):
-        '''验证 table_name 参数'''
+        """验证 table_name 参数"""
         if table_name is None:
             if self._table is None:
                 raise Exception("Parameter [table_name] is None.")
@@ -225,6 +269,30 @@ class BaseDao(object):
             if self._table != table_name:
                 self._table = table_name
                 self._column_list = self._table_column_dict_list[self._table]
+
+    def _obj_dict(self, obj):
+        """将obj的全部属性转换为dict，并保留值为None的属性，弥补obj.__dict__的缺陷"""
+        result = {}
+        for attr in dir(obj):
+            # 下划线开头的为私有方法和内建方法
+            if attr.startswith('_') or attr == 'metadata':
+                continue
+            value = getattr(obj, attr)
+            # 过滤掉可执行的方法
+            if callable(value):
+                continue
+            if type(value) in (
+                            types.BuiltinFunctionType, types.BuiltinMethodType, types.CodeType, types.DynamicClassAttribute,
+                            types.FrameType, types.FunctionType, types.GeneratorType, types.GetSetDescriptorType, types.LambdaType,
+                            types.MappingProxyType, types.MemberDescriptorType, types.MethodType, types.ModuleType,
+                            types.SimpleNamespace, types.TracebackType, types.new_class, types.prepare_class):
+                continue
+            result[attr] = value
+        return result
+
+    def change_table(self, table_name):
+        """通过init传入表名列表实现多表初始化，通过change_table完成表名切换"""
+        self._check_table_name(table_name=table_name)
 
     def generate_model(self, table_name=None, model_name=None, model_path="./model"):
         """根据表字段生成实体model"""
@@ -255,10 +323,10 @@ class BaseDao(object):
         logging.info("[%s] %s 已生成。" % (self._database, model_path))
 
     def execute_query(self, sql=None, single=False):
-        '''执行查询 SQL 语句
+        """执行查询 SQL 语句
         - :sql: sql 语句
         - :single: 是否查询单个结果集，默认False
-        '''
+        """
         try:
             if sql is None:
                 raise Exception("Parameter sql is None.")
@@ -269,9 +337,9 @@ class BaseDao(object):
             logging.error(e)
 
     def execute_update(self, sql=None):
-        '''执行更新 SQL 语句
+        """执行更新 SQL 语句
         - :sql: sql 语句
-        '''
+        """
         try:
             if sql is None:
                 raise Exception("Parameter sql is None.")
@@ -284,14 +352,16 @@ class BaseDao(object):
             self.__conn.rollback()
 
     def select_one(self, table_name=None, filters=None, clazz=None):
-        '''查询单个对象
+        """查询单个对象
         - @table_name 表名
         - @filters 过滤条件
         - @return 返回字典集合，集合中以表字段作为 key，字段值作为 value
-        '''
+        """
         self._check_table_name(table_name)
         if filters is None:
             filters = {}
+        elif not isinstance(filters, dict):
+            filters = filters.__dict__
         stitch_str = stitch_sequence(
             self._get_table_column_list(self._table))
         sql = "SELECT %s FROM %s" % (stitch_str, self._table)
@@ -300,10 +370,10 @@ class BaseDao(object):
         return self._parse_result(result, clazz)
 
     def select_pk(self, table_name=None, primary_key=None, clazz=None):
-        '''按主键查询
+        """按主键查询
         - @table_name 表名
         - @primary_key 主键值
-        '''
+        """
         self._check_table_name(table_name)
         stitch_str = stitch_sequence(
             self._get_table_column_list(self._table))
@@ -313,14 +383,18 @@ class BaseDao(object):
         return self._parse_result(result, clazz)
 
     def select_all(self, table_name=None, filters=None, clazz=None):
-        '''查询所有
+        """查询所有
         - @table_name 表名
         - @filters 过滤条件
-        - @return 返回字典集合，集合中以表字段作为 key，字段值作为 value
-        '''
+        - @clazz 结果的类型
+        - @return 如果clazz为None，则返回字典集合，集合中以表字段作为 key，字段值作为 value。
+                    否则返回clazz类型的对象列表
+        """
         self._check_table_name(table_name)
         if filters is None:
             filters = {}
+        elif not isinstance(filters, dict):
+            filters = filters.__dict__
         stitch_str = stitch_sequence(
             self._get_table_column_list(self._table))
         sql = "SELECT %s FROM %s" % (stitch_str, self._table)
@@ -328,21 +402,28 @@ class BaseDao(object):
         results = self.execute_query(sql)
         return self._parse_results(results, clazz)
 
-    def count(self, table_name=None):
-        '''统计记录数'''
+    def count(self, table_name=None, filters=None):
+        """统计记录数"""
         self._check_table_name(table_name)
-        sql = "SELECT count(*) FROM %s" % (self._table)
+        if filters is None:
+            filters = {}
+        elif not isinstance(filters, dict):
+            filters = filters.__dict__
+        sql = "SELECT count(*) FROM %s" % self._table
+        sql = QueryUtil.query_sql(sql, filters)
         result = self.execute_query(sql, True)
         return result[0]
 
     def select_page(self, table_name=None, page=None, filters=None, clazz=None):
-        '''分页查询
+        """分页查询
         - @table_name 表名
         - @return 返回字典集合，集合中以表字段作为 key，字段值作为 value
-        '''
+        """
         self._check_table_name(table_name)
         if filters is None:
             filters = {}
+        elif not isinstance(filters, dict):
+            filters = filters.__dict__
         if page is None:
             page = Page()
         filters["page"] = page
@@ -354,11 +435,11 @@ class BaseDao(object):
         return self._parse_results(result_tuple, clazz)
 
     def save(self, table_name=None, obj=None):
-        '''保存方法
+        """保存方法
         - @param table_name 表名
         - @param obj 对象
         - @return 影响行数
-        '''
+        """
         self._check_table_name(table_name)
         if obj is None:
             obj = {}
@@ -379,25 +460,25 @@ class BaseDao(object):
         return self.execute_update(sql)
 
     def update_by_primarykey(self, table_name=None, obj=None):
-        '''更新方法(根据主键更新，包含空值)
+        """更新方法(根据主键更新，包含空值)
         - @param table_name 表名
         - @param obj 对象
         - @return 影响行数
-        '''
+        """
         self._check_table_name(table_name)
         if obj is None:
             obj = {}
         elif not isinstance(obj, dict):
-            obj = obj.__dict__
+            obj = self._obj_dict(obj)
         primary_key = self._get_primary_key(self._table)
         if primary_key not in obj.keys() or obj.get(primary_key) is None:
             raise ValueError("Parameter [obj.%s] is None." % primary_key)
         kv_list = []
         where = "WHERE "
         for key, value in obj.items():
-            if self._table_dict[table_name][key]["COLUMN_KEY"] != "PRI":
+            if self._table_dict[self._table][key]["COLUMN_KEY"] != "PRI":
                 if value is None:
-                    if self._table_dict[table_name][key]["IS_NULLABLE"] == "YES":
+                    if self._table_dict[self._table][key]["IS_NULLABLE"] == "YES":
                         kv_list.append("%s=null" % (key))
                     else:
                         kv_list.append("%s=''" % (key))
@@ -410,11 +491,11 @@ class BaseDao(object):
         return self.execute_update(sql)
 
     def update_by_primarikey_selective(self, table_name=None, obj=None):
-        '''更新方法(根据主键更新，不包含空值)
+        """更新方法(根据主键更新，不包含空值)
         - @param table_name 表名
         - @param obj 对象
         - @return 影响行数
-        '''
+        """
         self._check_table_name(table_name)
         if obj is None:
             obj = {}
@@ -437,11 +518,11 @@ class BaseDao(object):
         return self.execute_update(sql)
 
     def remove_by_primarykey(self, table_name=None, value=None):
-        '''删除方法（根据主键删除）
+        """删除方法（根据主键删除）
         - @param table_name 表名
         - @param valuej 主键值
         - @return 影响行数
-        '''
+        """
         self._check_table_name(table_name)
         if value is None:
             raise ValueError("Parameter [value] can not be None.")
@@ -452,27 +533,30 @@ class BaseDao(object):
 
 
 class Page(object):
-    '分页对象'
+    """分页对象"""
 
     def __init__(self, page_num=1, page_size=10, count=False, total=0):
-        '''
+        """
         Page 初始化方法
         - @param page_num 页码，默认为1
         - @param page_size 页面大小, 默认为10
         - @param count 是否包含 count 查询
-        '''
+        """
         # 当前页数
         self.page_num = page_num if page_num > 0 else 1
         # 分页大小
         self.page_size = page_size if page_size > 0 else 10
-        # 总记录数
+        # 总记录数 TODO bug 不能动态反应记录数
         self.total = 0
-        # 总页数
-        self.pages = total / self.page_size
+        # 总页数 TODO有小数
+        self.pages = int((total + self.page_size - 1) / self.page_size)
         # 起始行（用于 mysql 分页查询）
         self.start_row = (self.page_num - 1) * self.page_size
         # 结束行（用于 mysql 分页查询）
         self.end_row = self.page_size
+
+    def hasNext(self):
+        return self.page_num <= self.pages
 
     def loadNextPage(self):
         self.page_num = self.page_num + 1
@@ -482,7 +566,7 @@ class Page(object):
 
 
 class QueryUtil(object):
-    '''
+    """
     SQL 语句拼接工具类：
     - 主方法: querySql(sql, filters)
     参数说明:
@@ -503,7 +587,7 @@ class QueryUtil(object):
     - 11、like（如：{"_rlike_name": }，拼接后为：name LIKE 'zhang%'）
     - 12、分组（如：{"groupby": "status"}，拼接后为：GROUP BY status）
     - 13、排序（如：{"orderby": "createDate"}，拼接后为：ORDER BY createDate）
-    '''
+    """
     NE = "_ne_"  # 拼接不等于
     LT = "_lt_"  # 拼接小于
     LE = "_le_"  # 拼接小于等于
@@ -520,7 +604,7 @@ class QueryUtil(object):
 
     @staticmethod
     def __filter_params(filters):
-        '''过滤参数条件'''
+        """过滤参数条件"""
         res = " WHERE 1=1"
         for key, value in filters.items():
             if key.startswith(QueryUtil.IN):  # 拼接 in
@@ -558,18 +642,20 @@ class QueryUtil(object):
                     res += " AND `%s`='%s' " % (key, value)
                 elif isinstance(value, int):
                     res += " AND `%s`=%d " % (key, value)
+                elif value is None:
+                    res += " AND `%s` is NULL " % key
         return res
 
     @staticmethod
     def __filter_group(filters):
-        '''过滤分组'''
+        """过滤分组"""
         group = filters.pop(QueryUtil.GROUP)
         res = " GROUP BY %s" % (group)
         return res
 
     @staticmethod
     def __filter_order(filters):
-        '''过滤排序'''
+        """过滤排序"""
         order = filters.pop(QueryUtil.ORDER)
         order_type = filters.pop(QueryUtil.ORDER_TYPE, "asc")
         res = " ORDER BY `%s` %s" % (order, order_type)
@@ -577,17 +663,17 @@ class QueryUtil(object):
 
     @staticmethod
     def __filter_page(filters):
-        '''过滤 page 对象'''
+        """过滤 page 对象"""
         page = filters.pop("page")
         return " LIMIT %d,%d" % (page.start_row, page.end_row)
 
     @staticmethod
     def query_sql(sql=None, filters=None):
-        '''拼接 SQL 查询条件
+        """拼接 SQL 查询条件
         - @param sql SQL 语句
         - @param filters 过滤条件
         - @return 返回拼接 SQL
-        '''
+        """
         if filters is None:
             return sql
         else:
@@ -610,101 +696,3 @@ class QueryUtil(object):
             if page:
                 sql += page
         return sql
-
-
-def _test1():
-    CONFIG = {
-        "user": "root",
-        "password": "root",
-        "database": "test",
-        "table": "province"
-    }
-    # 指定初始化 table
-    test_dao = BaseDao(**CONFIG)
-
-    # 查询单条记录
-    # one = test_dao.select_one()
-    # print(one)
-
-    # 查询所有记录
-    # all = test_dao.select_all()
-    # print(all)
-
-    # 查询分页记录
-    # page = test_dao.select_page()
-    # print(page)
-
-    # 按主键查询
-    one_pk = test_dao.select_pk(primary_key=1)
-    print(one_pk)
-
-
-def _test2():
-    CONFIG = {
-        "user": "root",
-        "password": "root",
-        "database": "test"
-    }
-    # 初始化所有 table
-    test_dao = BaseDao(**CONFIG)
-
-    # one1 = test_dao.select_one("province")
-    # print(one1)
-    # one2 = test_dao.select_one("city")
-    # print(one2)
-
-    # filters1 = {
-    #     QueryUtil.GE + "id": 5,
-    #     QueryUtil.LT + "id": 30,
-    #     QueryUtil.ORDER: "id",
-    #     QueryUtil.ORDER_TYPE: "desc"
-    # }
-    # all_filters = test_dao.select_all("province", filters1)
-    # print(all_filters)
-
-    filters2 = {
-        QueryUtil.LEFT_LIKE + "province": "省",
-    }
-    page = Page(1, 20)
-    page_filters = test_dao.select_page("province", page, filters2)
-    print(page_filters)
-
-
-def _test3():
-    CONFIG = {
-        "user": "root",
-        "password": "root",
-        "database": "test",
-        "table": "province"
-    }
-    # 初始化所有 table
-    test_dao = BaseDao(**CONFIG, use_conf=False)
-    province = {
-        "id": None,
-        "province_id": "990000",
-        "province": "测试"
-    }
-    test_dao.save(obj=province)
-
-    # f1 = {
-    #     "province": "测试"
-    # }
-    # item = test_dao.select_one(filters=f1)
-    # print(item)
-    # item["province"] = "测试1"
-    # test_dao.update_by_primarikey_selective(obj=item)
-
-    # item["province"] = "测试2"
-    # test_dao.update_by_primarykey("province", item)
-
-    # f2 = {
-    #     "province": "测试1"
-    # }
-    # item = test_dao.select_one(filters=f2)
-    # test_dao.remove_by_primarykey(value=item["id"])
-
-
-if __name__ == '__main__':
-    # _test1()
-    # _test2()
-    _test3()

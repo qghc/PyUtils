@@ -13,25 +13,6 @@ class Comment:
     time = None
 
 
-# 测试BaseDao
-def test_BaseDao():
-    dao = BaseDao("comment")
-    # 测试生成model
-    dao.generate_model(model_name="Comment")
-    # 测试查询
-    result = dao.select_one(clazz=Comment)
-    print(result.user_id)
-    print(result.__dict__)
-    # 测试分页
-    count = dao.count()
-    page = Page(page_num=1, page_size=100, total=count)
-    while page.page_num <= page.pages:
-        one_page = dao.select_page(page=page, clazz=Comment)
-        for item in one_page:
-            print(item.__dict__)
-        page.loadNextPage()
-
-
 def test_CommonSpider():
     # 测试CommonSpider
     title = Element()
@@ -71,7 +52,6 @@ def test_MatchUtils():
     print(content)
 
 
-# test_BaseDao()
 # test_CommonSpider()
 # test_ImgSpider()
 test_MatchUtils()
