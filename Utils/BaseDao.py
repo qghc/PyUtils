@@ -322,17 +322,26 @@ class BaseDao(object):
         file.close()
         logging.info("[%s] %s 已生成。" % (self._database, model_path))
 
-    def execute_query(self, sql=None, single=False):
+    def execute_query(self, sql=None, single=False, clazz=None):
         """执行查询 SQL 语句
         - :sql: sql 语句
         - :single: 是否查询单个结果集，默认False
+        - :clazz: 结果类型，将查询的结果封装成实例对象再返回
         """
         try:
             if sql is None:
                 raise Exception("Parameter sql is None.")
             logging.info("[%s] SQL >>> [%s]" % (self._database, sql))
             self.__cursor.execute(sql)
-            return self.__cursor.fetchone() if single else self.__cursor.fetchall()
+            result = self.__cursor.fetchone() if single else self.__cursor.fetchall()
+            if clazz is None:
+                return result
+            else:
+                if single:
+                    result = self._parse_result(result, clazz)
+                else:
+                    result = self._parse_results(result, clazz)
+                return result
         except Exception as e:
             logging.error(e)
 
@@ -366,8 +375,7 @@ class BaseDao(object):
             self._get_table_column_list(self._table))
         sql = "SELECT %s FROM %s" % (stitch_str, self._table)
         sql = QueryUtil.query_sql(sql, filters)
-        result = self.execute_query(sql, True)
-        return self._parse_result(result, clazz)
+        return self.execute_query(sql, True, clazz)
 
     def select_pk(self, table_name=None, primary_key=None, clazz=None):
         """按主键查询
@@ -379,8 +387,7 @@ class BaseDao(object):
             self._get_table_column_list(self._table))
         sql = "SELECT %s FROM %s" % (stitch_str, self._table)
         sql = QueryUtil.query_sql(sql, {self._get_primary_key(self._table): primary_key})
-        result = self.execute_query(sql, True)
-        return self._parse_result(result, clazz)
+        return self.execute_query(sql, True, clazz)
 
     def select_all(self, table_name=None, filters=None, clazz=None):
         """查询所有
@@ -399,8 +406,7 @@ class BaseDao(object):
             self._get_table_column_list(self._table))
         sql = "SELECT %s FROM %s" % (stitch_str, self._table)
         sql = QueryUtil.query_sql(sql, filters)
-        results = self.execute_query(sql)
-        return self._parse_results(results, clazz)
+        return self.execute_query(sql, clazz=clazz)
 
     def count(self, table_name=None, filters=None):
         """统计记录数"""
@@ -431,8 +437,7 @@ class BaseDao(object):
             self._get_table_column_list(self._table))
         sql = "SELECT %s FROM %s" % (stitch_str, self._table)
         sql = QueryUtil.query_sql(sql, filters)
-        result_tuple = self.execute_query(sql)
-        return self._parse_results(result_tuple, clazz)
+        return self.execute_query(sql, clazz=clazz)
 
     def save(self, table_name=None, obj=None):
         """保存方法
