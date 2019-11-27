@@ -6,6 +6,9 @@ from Utils.BaseDao import BaseDao, Page, QueryUtil
 def init():
     # 1三种读取配置的方式
     #     1.1默认读取运行文件所在目录下的BaseDao.conf
+    #     dao = BaseDao()                        # 当前目录下的BaseDao.conf
+    #     dao = BaseDao(conf="./conf/")          # 指定目录下的BaseDao.conf
+    #     dao = BaseDao(conf="../conf/db.conf")  # 指定目录下的指定文件
     #
     #     1.2通过构造器读取
     #     dao = BaseDao(user="", password="", database="")
@@ -116,12 +119,12 @@ def delete():
 
 
 if __name__ == '__main__':
-    # init()
+    init()
     # insert(123, 234, "Hello world1!", "test insert1")
     # insert(124, 235, "Hello world2!", "test insert2")
     # insert(125, 236, "Hello world3!", "test insert3")
     # insert(124, 237, "Hello world4!", None)
     # select()
     # select_with_condition()
-    update()
+    # update()
     # delete()
