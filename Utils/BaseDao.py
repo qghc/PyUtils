@@ -12,6 +12,7 @@
 6.增加初始化多个表的功能
 7.修复若干bug
 """
+import os
 import types
 
 __author__ = "阮程、亓根火柴（修改优化）"
@@ -54,12 +55,18 @@ def stitch_sequence(seq=None, is_field=True, suf=None):
     return res[:-len(suf)]
 
 
-def readConfig():
+def readConfig(conf_loc):
     # 加载现有配置文件
     conf = configparser.ConfigParser()
-    conf.read("BaseDao.conf")
     # 读取配置信息
     try:
+        if conf_loc.endswith("/"):
+            conf_loc = conf_loc + "BaseDao.conf"
+        elif not conf_loc.endswith(".conf"):
+            conf_loc = conf_loc + "/BaseDao.conf"
+        if not os.path.exists(conf_loc):
+            raise Exception("Config file is not exist[%s]." % conf_loc)
+        conf.read(conf_loc)
         host = conf.get('db', 'host')
         port = conf.getint('db', 'port')
         user = conf.get('db', 'user')
@@ -88,18 +95,22 @@ class BaseDao(object):
     - :password: 连接数据库密码(默认: None), 如果为空，则会抛异常
     - :database: 连接数据库(默认: None), 如果为空，则会抛异常
     - :charset: 编码(默认: utf8)
+    - :conf: 配置文件的目录，默认为[./BaseDao.conf]，如果为空，则不使用配置文件
     """
     __cursor = None
     __conn = None
 
     def __init__(self, table=None, creator=pymysql, host="localhost", port=3306, user=None, password=None,
-                 database=None, charset="utf8", use_conf=True):
+                 database=None, charset="utf8", conf="./"):
         """
         1三种读取配置的方式
-            1.1默认读取运行文件所在目录下的BaseDao.conf
+            1.1默认读取3种文件：运行文件所在目录下的BaseDao.conf、指定目录下的BaseDao.conf、指定目录下的指定conf文件。
+            dao = BaseDao()                         #当前目录下的BaseDao.conf
+            dao = BaseDao(conf="./conf/")           #指定目录下的BaseDao.conf
+            dao = BaseDao(conf="../conf/db.conf")   #指定目录下的指定文件
 
             1.2通过构造器读取
-            dao = BaseDao(user="", password="", database="")
+            dao = BaseDao(user="", password="", database="", conf=None)
 
             1.3通过字典读取
             CONFIG = {
@@ -108,7 +119,7 @@ class BaseDao(object):
                 "database": "test",
                 "table": "province"
             }
-            dao = BaseDao(**CONFIG, use_conf=False)
+            dao = BaseDao(**CONFIG, conf=None)
 
         2三种初始化表数据的方式
             2.1初始化所有表
@@ -124,8 +135,8 @@ class BaseDao(object):
             dao.select_all(table_name=table_list[1])    # 或者在执行时指定表名
 
         """
-        if use_conf:
-            host, port, user, password, database, charset = readConfig()
+        if conf is not None:
+            host, port, user, password, database, charset = readConfig(conf)
         if host is None:
             raise ValueError("Parameter [host] is None.")
         if port is None:
@@ -158,7 +169,8 @@ class BaseDao(object):
             self.__cursor.close()
         if self.__conn:
             self.__conn.close()
-        logging.debug("[{0}] 连接关闭。".format(self._database))
+        if hasattr(self, "_database"):
+            logging.debug("[{0}] 连接关闭。".format(self._database))
 
     def _init_connect(self):
         """初始化连接"""
@@ -205,6 +217,8 @@ class BaseDao(object):
         stitch_str = stitch_sequence(self._information_schema_columns)
         sql = """SELECT %s FROM information_schema.`COLUMNS` WHERE TABLE_SCHEMA='%s' AND TABLE_NAME='%s' """ % (stitch_str, self._database, table_name)
         column_tuple = self.execute_query(sql)
+        if len(column_tuple) == 0:
+            raise Exception("Table [%s] has no column , does it exist?" % table_name)
         column_dict = {}
         for column in column_tuple:
             column_dict_item = {key: value for key, value in zip(
